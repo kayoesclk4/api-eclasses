@@ -42,43 +42,6 @@ app.get('/teams', (req, res) => res.json(state.teams));
 app.get('/games', (req, res) => res.json(state.games));
 app.get('/matches', (req, res) => res.json(state.matches));
 
-// Salvar itens (POST)
-app.post('/save/:type', (req, res) => {
-    const type = req.params.type;
-    if (state[type]) {
-        const newItem = {
-            id: Date.now(),
-            ...req.body
-        };
-
-        if (newItem.teamId)  newItem.teamId  = parseInt(newItem.teamId);
-        if (newItem.gameId)  newItem.gameId  = parseInt(newItem.gameId);
-        if (newItem.team1Id) newItem.team1Id = parseInt(newItem.team1Id);
-        if (newItem.team2Id) newItem.team2Id = parseInt(newItem.team2Id);
-        if (newItem.score1)  newItem.score1  = parseInt(newItem.score1);
-        if (newItem.score2)  newItem.score2  = parseInt(newItem.score2);
-
-        state[type].push(newItem);
-        res.status(201).json(newItem);
-    } else {
-        res.status(400).json({ error: "Tipo inválido" });
-    }
-});
-
-// Finalizar partida com placar escolhido (PUT)
-app.put('/matches/:id/finish', (req, res) => {
-    const id = parseInt(req.params.id);
-    const match = state.matches.find(m => m.id === id);
-    if (match) {
-        match.status = 'finished';
-        match.score1 = parseInt(req.body.score1) || 0;
-        match.score2 = parseInt(req.body.score2) || 0;
-        res.json(match);
-    } else {
-        res.status(404).json({ error: "Partida não encontrada" });
-    }
-});
-
 app.listen(PORT, () => {
     console.log(`API E-Classes rodando em http://localhost:${PORT}`);
 });
