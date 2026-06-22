@@ -9,6 +9,23 @@ const PORT = 3000;
 app.use(cors());
 app.use(express.json());
 
+async function getJogos() {
+    try {
+        const response = await fetch(`${BASE_URL}jogos`);
+       
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+       
+        const data = await response.json();
+        return data;
+    } catch (error) {
+        console.error('Erro ao buscar jogos:', error);
+        alert('Erro ao carregar os jogos. Verifique se o servidor está rodando.');
+        return [];
+    }
+}
+
 // Lê o arquivo de dados
 function lerDados() {
     const caminho = path.join(__dirname, 'data.json');
@@ -35,11 +52,9 @@ app.get('/api/jogos', (req, res) => {
 app.get('/api/jogos/:id', (req, res) => {
     const { games } = lerDados();
     const jogo = games.find(j => j.id === Number(req.params.id));
-
     if (!jogo) {
         return res.status(404).json({ erro: 'Jogo não encontrado' });
     }
-
     res.status(200).json(jogo);
 });
 
@@ -53,11 +68,9 @@ app.get('/api/times', (req, res) => {
 app.get('/api/times/:id', (req, res) => {
     const { teams } = lerDados();
     const time = teams.find(t => t.id === Number(req.params.id));
-
     if (!time) {
         return res.status(404).json({ erro: 'Time não encontrado' });
     }
-
     res.status(200).json(time);
 });
 
@@ -71,11 +84,9 @@ app.get('/api/competidores', (req, res) => {
 app.get('/api/competidores/:id', (req, res) => {
     const { competitors } = lerDados();
     const competidor = competitors.find(c => c.id === Number(req.params.id));
-
     if (!competidor) {
         return res.status(404).json({ erro: 'Competidor não encontrado' });
     }
-
     res.status(200).json(competidor);
 });
 
@@ -89,11 +100,9 @@ app.get('/api/confrontos', (req, res) => {
 app.get('/api/confrontos/:id', (req, res) => {
     const { matches } = lerDados();
     const confronto = matches.find(m => m.id === Number(req.params.id));
-
     if (!confronto) {
         return res.status(404).json({ erro: 'Confronto não encontrado' });
     }
-
     res.status(200).json(confronto);
 });
 
