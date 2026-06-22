@@ -9,23 +9,6 @@ const PORT = 3000;
 app.use(cors());
 app.use(express.json());
 
-async function getJogos() {
-    try {
-        const response = await fetch(`${BASE_URL}jogos`);
-       
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-       
-        const data = await response.json();
-        return data;
-    } catch (error) {
-        console.error('Erro ao buscar jogos:', error);
-        alert('Erro ao carregar os jogos. Verifique se o servidor está rodando.');
-        return [];
-    }
-}
-
 // Lê o arquivo de dados
 function lerDados() {
     const caminho = path.join(__dirname, 'data.json');
