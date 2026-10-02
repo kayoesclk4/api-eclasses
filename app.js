@@ -16,6 +16,70 @@ function lerDados() {
     return JSON.parse(conteudo);
 }
 
+// Salva o objeto de dados inteiro de volta no data.json
+function salvarDados(dados) {
+    const caminho = path.join(__dirname, 'data.json');
+    fs.writeFileSync(caminho, JSON.stringify(dados, null, 2), 'utf-8');
+}
+
+// Gera o próximo id disponível de uma lista (maior id + 1)
+function proximoId(lista) {
+    return lista.length ? Math.max(...lista.map(item => item.id)) + 1 : 1;
+}
+
+// Cria as 5 rotas (GET todos, GET por id, POST, PUT, DELETE) para um recurso.
+// caminho = nome usado na URL (ex: 'jogos'), chave = nome usado no data.json (ex: 'games')
+function criarRotasCRUD(caminho, chave, nomeErro) {
+    // GET /api/<caminho> - lista tudo
+    app.get(`/api/${caminho}`, (req, res) => {
+        const dados = lerDados();
+        res.status(200).json(dados[chave]);
+    });
+
+    // GET /api/<caminho>/:id - um item pelo id
+    app.get(`/api/${caminho}/:id`, (req, res) => {
+        const dados = lerDados();
+        const item = dados[chave].find(i => i.id === Number(req.params.id));
+        if (!item) {
+            return res.status(404).json({ erro: `${nomeErro} não encontrado` });
+        }
+        res.status(200).json(item);
+    });
+
+    // POST /api/<caminho> - cria um novo item e salva no data.json
+    app.post(`/api/${caminho}`, (req, res) => {
+        const dados = lerDados();
+        const novoItem = { ...req.body, id: proximoId(dados[chave]) };
+        dados[chave].push(novoItem);
+        salvarDados(dados);
+        res.status(201).json(novoItem);
+    });
+
+    // PUT /api/<caminho>/:id - atualiza um item existente e salva no data.json
+    app.put(`/api/${caminho}/:id`, (req, res) => {
+        const dados = lerDados();
+        const indice = dados[chave].findIndex(i => i.id === Number(req.params.id));
+        if (indice === -1) {
+            return res.status(404).json({ erro: `${nomeErro} não encontrado` });
+        }
+        dados[chave][indice] = { ...dados[chave][indice], ...req.body, id: dados[chave][indice].id };
+        salvarDados(dados);
+        res.status(200).json(dados[chave][indice]);
+    });
+
+    // DELETE /api/<caminho>/:id - remove um item e salva no data.json
+    app.delete(`/api/${caminho}/:id`, (req, res) => {
+        const dados = lerDados();
+        const indice = dados[chave].findIndex(i => i.id === Number(req.params.id));
+        if (indice === -1) {
+            return res.status(404).json({ erro: `${nomeErro} não encontrado` });
+        }
+        const [removido] = dados[chave].splice(indice, 1);
+        salvarDados(dados);
+        res.status(200).json(removido);
+    });
+}
+
 // GET / - boas vindas
 app.get('/', (req, res) => {
     res.status(200).json({
@@ -25,75 +89,16 @@ app.get('/', (req, res) => {
     });
 });
 
-// GET /api/jogos - todos os jogos
-app.get('/api/jogos', (req, res) => {
-    const { games } = lerDados();
-    res.status(200).json(games);
-});
-
-// GET /api/jogos/:id - um jogo pelo id
-app.get('/api/jogos/:id', (req, res) => {
-    const { games } = lerDados();
-    const jogo = games.find(j => j.id === Number(req.params.id));
-    if (!jogo) {
-        return res.status(404).json({ erro: 'Jogo não encontrado' });
-    }
-    res.status(200).json(jogo);
-});
-
-// GET /api/times - todos os times
-app.get('/api/times', (req, res) => {
-    const { teams } = lerDados();
-    res.status(200).json(teams);
-});
-
-// GET /api/times/:id - um time pelo id
-app.get('/api/times/:id', (req, res) => {
-    const { teams } = lerDados();
-    const time = teams.find(t => t.id === Number(req.params.id));
-    if (!time) {
-        return res.status(404).json({ erro: 'Time não encontrado' });
-    }
-    res.status(200).json(time);
-});
-
-// GET /api/competidores - todos os competidores
-app.get('/api/competidores', (req, res) => {
-    const { competitors } = lerDados();
-    res.status(200).json(competitors);
-});
-
-// GET /api/competidores/:id - um competidor pelo id
-app.get('/api/competidores/:id', (req, res) => {
-    const { competitors } = lerDados();
-    const competidor = competitors.find(c => c.id === Number(req.params.id));
-    if (!competidor) {
-        return res.status(404).json({ erro: 'Competidor não encontrado' });
-    }
-    res.status(200).json(competidor);
-});
-
-// GET /api/confrontos - todos os confrontos
-app.get('/api/confrontos', (req, res) => {
-    const { matches } = lerDados();
-    res.status(200).json(matches);
-});
-
-// GET /api/confrontos/:id - um confronto pelo id
-app.get('/api/confrontos/:id', (req, res) => {
-    const { matches } = lerDados();
-    const confronto = matches.find(m => m.id === Number(req.params.id));
-    if (!confronto) {
-        return res.status(404).json({ erro: 'Confronto não encontrado' });
-    }
-    res.status(200).json(confronto);
-});
+criarRotasCRUD('jogos', 'games', 'Jogo');
+criarRotasCRUD('times', 'teams', 'Time');
+criarRotasCRUD('competidores', 'competitors', 'Competidor');
+criarRotasCRUD('confrontos', 'matches', 'Confronto');
 
 // Rota não encontrada
 app.use((req, res) => {
     res.status(404).json({
         erro: 'Rota não encontrada',
-        mensagem: 'Apenas requisições GET são suportadas nesta API',
+        mensagem: 'Verifique o método (GET, POST, PUT, DELETE) e a URL',
     });
 });
 
