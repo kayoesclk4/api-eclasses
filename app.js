@@ -1,108 +1,143 @@
+require('dotenv').config();
+
 const express = require('express');
 const cors = require('cors');
-const path = require('path');
-const fs = require('fs');
+const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
+
+if (!process.env.SUPABASE_URL || !process.env.SUPABASE_KEY) {
+    console.error('Configure SUPABASE_URL e SUPABASE_KEY no arquivo .env');
+    process.exit(1);
+}
+
+const supabase = createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_KEY
+);
 
 app.use(cors());
 app.use(express.json());
 
-// Lê o arquivo de dados
-function lerDados() {
-    const caminho = path.join(__dirname, 'data.json');
-    const conteudo = fs.readFileSync(caminho, 'utf-8');
-    return JSON.parse(conteudo);
+const recursos = {
+    jogos: { tabela: 'games', nome: 'Jogo' },
+    times: { tabela: 'teams', nome: 'Time' },
+    competidores: { tabela: 'competitors', nome: 'Competidor' },
+    confrontos: { tabela: 'matches', nome: 'Confronto' }
+};
+
+function numeroId(valor) {
+    return Number(valor);
 }
 
-// Salva o objeto de dados inteiro de volta no data.json
-function salvarDados(dados) {
-    const caminho = path.join(__dirname, 'data.json');
-    fs.writeFileSync(caminho, JSON.stringify(dados, null, 2), 'utf-8');
+function limparDados(dados, camposPermitidos) {
+    const resultado = {};
+    for (const campo of camposPermitidos) {
+        if (dados[campo] !== undefined) resultado[campo] = dados[campo];
+    }
+    return resultado;
 }
 
-// Gera o próximo id disponível de uma lista (maior id + 1)
-function proximoId(lista) {
-    return lista.length ? Math.max(...lista.map(item => item.id)) + 1 : 1;
-}
+const campos = {
+    jogos: ['name', 'genre'],
+    times: ['name', 'color'],
+    competidores: ['name', 'nickname', 'teamId'],
+    confrontos: ['gameId', 'team1Id', 'team2Id', 'score1', 'score2', 'status', 'date']
+};
 
-// Cria as 5 rotas (GET todos, GET por id, POST, PUT, DELETE) para um recurso.
-// caminho = nome usado na URL (ex: 'jogos'), chave = nome usado no data.json (ex: 'games')
-function criarRotasCRUD(caminho, chave, nomeErro) {
-    // GET /api/<caminho> - lista tudo
-    app.get(`/api/${caminho}`, (req, res) => {
-        const dados = lerDados();
-        res.status(200).json(dados[chave]);
+function criarRotasCRUD(caminho) {
+    const recurso = recursos[caminho];
+    const tabela = recurso.tabela;
+
+    app.get(`/api/${caminho}`, async (req, res) => {
+        const { data, error } = await supabase.from(tabela).select('*').order('id');
+        if (error) return res.status(500).json({ erro: error.message });
+        res.status(200).json(data);
     });
 
-    // GET /api/<caminho>/:id - um item pelo id
-    app.get(`/api/${caminho}/:id`, (req, res) => {
-        const dados = lerDados();
-        const item = dados[chave].find(i => i.id === Number(req.params.id));
-        if (!item) {
-            return res.status(404).json({ erro: `${nomeErro} não encontrado` });
+    app.get(`/api/${caminho}/:id`, async (req, res) => {
+        const { data, error } = await supabase
+            .from(tabela)
+            .select('*')
+            .eq('id', numeroId(req.params.id))
+            .single();
+
+        if (error || !data) {
+            return res.status(404).json({ erro: `${recurso.nome} não encontrado` });
         }
-        res.status(200).json(item);
+
+        res.status(200).json(data);
     });
 
-    // POST /api/<caminho> - cria um novo item e salva no data.json
-    app.post(`/api/${caminho}`, (req, res) => {
-        const dados = lerDados();
-        const novoItem = { ...req.body, id: proximoId(dados[chave]) };
-        dados[chave].push(novoItem);
-        salvarDados(dados);
-        res.status(201).json(novoItem);
+    app.post(`/api/${caminho}`, async (req, res) => {
+        const dados = limparDados(req.body, campos[caminho]);
+        const { data, error } = await supabase
+            .from(tabela)
+            .insert(dados)
+            .select()
+            .single();
+
+        if (error) return res.status(400).json({ erro: error.message });
+        res.status(201).json(data);
     });
 
-    // PUT /api/<caminho>/:id - atualiza um item existente e salva no data.json
-    app.put(`/api/${caminho}/:id`, (req, res) => {
-        const dados = lerDados();
-        const indice = dados[chave].findIndex(i => i.id === Number(req.params.id));
-        if (indice === -1) {
-            return res.status(404).json({ erro: `${nomeErro} não encontrado` });
+    app.put(`/api/${caminho}/:id`, async (req, res) => {
+        const id = numeroId(req.params.id);
+        const dados = limparDados(req.body, campos[caminho]);
+
+        const { data, error } = await supabase
+            .from(tabela)
+            .update(dados)
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error || !data) {
+            return res.status(404).json({ erro: `${recurso.nome} não encontrado` });
         }
-        dados[chave][indice] = { ...dados[chave][indice], ...req.body, id: dados[chave][indice].id };
-        salvarDados(dados);
-        res.status(200).json(dados[chave][indice]);
+
+        res.status(200).json(data);
     });
 
-    // DELETE /api/<caminho>/:id - remove um item e salva no data.json
-    app.delete(`/api/${caminho}/:id`, (req, res) => {
-        const dados = lerDados();
-        const indice = dados[chave].findIndex(i => i.id === Number(req.params.id));
-        if (indice === -1) {
-            return res.status(404).json({ erro: `${nomeErro} não encontrado` });
+    app.delete(`/api/${caminho}/:id`, async (req, res) => {
+        const id = numeroId(req.params.id);
+
+        const { data, error } = await supabase
+            .from(tabela)
+            .delete()
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error || !data) {
+            return res.status(404).json({ erro: `${recurso.nome} não encontrado` });
         }
-        const [removido] = dados[chave].splice(indice, 1);
-        salvarDados(dados);
-        res.status(200).json(removido);
+
+        res.status(200).json(data);
     });
 }
 
-// GET / - boas vindas
 app.get('/', (req, res) => {
     res.status(200).json({
-        mensagem: 'Bem vindo à API GamerClass',
+        mensagem: 'Bem vindo à API E-Classes',
         status: 'sucesso',
-        rotas: ['/api/jogos', '/api/times', '/api/competidores', '/api/confrontos'],
+        banco: 'Supabase',
+        rotas: Object.keys(recursos).map(nome => `/api/${nome}`)
     });
 });
 
-criarRotasCRUD('jogos', 'games', 'Jogo');
-criarRotasCRUD('times', 'teams', 'Time');
-criarRotasCRUD('competidores', 'competitors', 'Competidor');
-criarRotasCRUD('confrontos', 'matches', 'Confronto');
+for (const caminho of Object.keys(recursos)) {
+    criarRotasCRUD(caminho);
+}
 
-// Rota não encontrada
 app.use((req, res) => {
     res.status(404).json({
         erro: 'Rota não encontrada',
-        mensagem: 'Verifique o método (GET, POST, PUT, DELETE) e a URL',
+        mensagem: 'Verifique o método e a URL.'
     });
 });
 
 app.listen(PORT, () => {
-    console.log(`Servidor rodando na porta ${PORT}`);
-    console.log(`Acesse: http://localhost:${PORT}`);
+    console.log(`Servidor rodando em http://localhost:${PORT}`);
 });
